@@ -9,19 +9,36 @@ import plotly.graph_objects as go
 
 
 # Read the CSV files for IMO and ports data
-ship_data = pd.read_csv("imo_tracking.csv")
-ports_data = pd.read_csv("ports.csv")
-regions = pd.read_csv("regions.csv")
-yy_ship_count = pd.read_csv("yy_ship_count.csv")
-
+ship_data = pd.read_csv("https://dl.dropboxusercontent.com/scl/fi/4bz3qrjqhbevtlqn4w131/imo_tracking.csv?rlkey=w9evtnyx2oo1wwx2sdaw0190r&dl=0")
+#ship_data = pd.read_csv("imo_tracking.csv")
+ports_data = pd.read_csv("https://dl.dropboxusercontent.com/scl/fi/4h83p47fpaz5v1tnhaw69/ports.csv?rlkey=1erpymfq8eq6fzst5dcxi0wt3&dl=0")
+#ports_data = pd.read_csv("ports.csv")
+regions = pd.read_csv("https://dl.dropboxusercontent.com/scl/fi/dhow2fvxtibo46gjget76/regions.csv?rlkey=xsoa08k36f2z8q4rqpy4p29y8&dl=0")
+#regions = pd.read_csv("regions.csv")
+yy_ship_count = pd.read_csv("https://dl.dropboxusercontent.com/scl/fi/gzu9k87fxiutcf0q6uqo3/yy_ship_count.csv?rlkey=04hv0trgaoe0myk3pjcsmnu7e&dl=0")
+#yy_ship_count = pd.read_csv("yy_ship_count.csv")
 combined_data = pd.merge(ship_data, yy_ship_count, on='imo', how='left')
+
+#combined_data['seen_date'] = pd.to_datetime(combined_data['seen_date'], format='%Y-%m-%d %H:%M:%S')
+#combined_data['seen_date_hour'] = combined_data['seen_date'].dt.hour  # Extract hours from seen_date
+
+#df['seen_date_hour'] = df['seen_date'].dt.hour  # Extract hours from seen_date
+combined_data['seen_date'] = pd.to_datetime(combined_data['seen_date'], format='%Y-%m-%d %H:%M:%S')
+#df['cumulative_hours'] = (df['seen_date'] - df['seen_date'].min()).dt.total_seconds() / 3600 + 1
+combined_data['cumulative_hours'] = (combined_data['seen_date'] - combined_data['seen_date'].iloc[0]).dt.total_seconds() / 3600
+
+#latest_locations = ship_data.groupby('imo').apply(lambda x: x.loc[x['seen_date'].idxmax()]).reset_index(drop=True)
+
+#a=combined_data[['seen_date','cumulative_hours','imo','lat','lon']]
+#print(a.head(52))
+
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Get unique values for the source region dropdown
 source_regions = ship_data['source_region'].unique()
 
 app.layout = dbc.Container([
-    html.H1("IMO and Ports Location Data", style={'text-align': 'center'}),
+    
     dbc.Row([
         dbc.Col(
             html.Div([
@@ -128,8 +145,34 @@ app.layout = dbc.Container([
                     step=0.2,
                     marks={value: str(value) for value in range(11, 15) if value % 1 == 0},
 
-                    value=11,  # Initial value
-                ),                
+                    value=12,  # Initial value
+                ),  
+                
+                 # Display the counts of 'Full' and 'Empty' values
+                html.Div(id='ef-counts'),
+                
+                html.Label('Select a Time Range (in hours):'),
+                dcc.Slider(
+                    id='time-range-slider',
+                    min=1,
+                    max=81,
+                    step=1,
+                    marks={i: str(i) for i in range(1, 81, 8)},
+                    value=30  # Initial time range value
+                ),
+                html.Label('idle if no movement in (days)'),
+                dcc.Slider(
+                    id='idle-slider',
+                    min=1,
+                    max=8,
+                    step=1,
+                    marks={i: str(i) for i in range(1, 9, 1)},
+                    value=5  # Initial time range value
+
+                )
+
+                 # Display the counts of 'Full' and 'Empty' values
+                #html.Div(id='ef-counts')
 
                           
    
@@ -148,7 +191,8 @@ app.layout = dbc.Container([
             width=8  # Right side column width
         )
     ], justify="left")  # Center-aligns the row
-])    
+])  
+print("part 1")  
 @app.callback(
     Output('source-subregion-dropdown', 'options'),
     [Input('source-region-dropdown', 'value')]
@@ -214,10 +258,11 @@ def update_dest_port_options(selected_dest_subregions):
 
 
 
-
+print("part 2")
 
 @app.callback(
     Output('map', 'figure'),
+    Output('ef-counts', 'children'),
     [Input('imo-search', 'value'),
      Input('source-region-dropdown', 'value'),
      Input('source-subregion-dropdown', 'value'),
@@ -228,10 +273,14 @@ def update_dest_port_options(selected_dest_subregions):
      Input('checklist-idle-input', 'value'),
      Input('checklist-emptyfull-input', 'value'),
      Input('fulldraft-slider','value'),
+     Input('time-range-slider', 'value'),
+     Input('idle-slider','value'),
+     
      ]
 )
+
 def update_map(imo_number, selected_regions,selected_subregions,selected_ports,dest_regions,dest_subregions,dest_ports,
-               selected_idle_status,selected_emptyfull_status,fulldraft):
+               selected_idle_status,selected_emptyfull_status,fulldraft,selected_time_range,idle_slider):
     filtered_ship_data = combined_data  # Initialize with the combined data
 
     #print(combined_data.columns.tolist())
@@ -240,12 +289,19 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
      # Filter based on selected idle status
     #if selected_idle_status:
     #    filtered_ship_data = combined_data[combined_data['idle'].isin(selected_idle_status)]
-    '''if fulldraft:
-        fulldraft_list = [fulldraft]
-        filtered_ship_data = filtered_ship_data[filtered_ship_data['max_draft'].isin(fulldraft_list)]'''
+
+    
+
+    print("part 3")
+        
+    if idle_slider:
+        filtered_ship_data = filtered_ship_data[filtered_ship_data['idle_x'] <= idle_slider]
+
+    
+    
+
     if fulldraft:
         filtered_ship_data = filtered_ship_data[filtered_ship_data['max_draft'] <= fulldraft]
-
 
     if selected_emptyfull_status:
         filtered_ship_data = filtered_ship_data[filtered_ship_data['empty_full'].isin(selected_emptyfull_status)]
@@ -281,7 +337,7 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
         filtered_ship_data = filtered_ship_data[filtered_ship_data['source_port'].isin(selected_ports)]
     
     
-
+    print ("part 4")
 
     # Convert 'seen_date' column to datetime
     filtered_ship_data['seen_date'] = pd.to_datetime(filtered_ship_data['seen_date'])
@@ -298,24 +354,25 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
     # Create a new column 'size' to differentiate between latest and previous locations
     latest_locations['size'] = 10  # Default size for previous locations
     #latest_locations.loc[latest_locations['hours_since_latest'] == 0, 'size'] = 20  # Larger size for the latest location
- 
 
-    '''imo_map_trace = go.Scattermapbox(
-        mode="markers+lines",
-        lon=[10, 20, 30],
-        lat=[10, 20, 30],
-        marker={'size': 10}
-    )
+    #filtered_ship_data = filtered_ship_data[filtered_ship_data['seen_date_hour'] <= selected_time_range]
+    print("part 5")
 
-    # Define the second trace for your Scattermapbox (imo_map)
-    fig_trace = go.Scattermapbox(
-        mode="markers+lines",
-        lon=[-50, -60, 40],
-        lat=[30, 10, -20],
-        marker={'size': 10}
-    )'''
+    # Calculate counts of 'Full' and 'Empty' values in the 'ef' column
+    full_count = len(latest_locations[latest_locations['ef'] == 0])  # Assuming '0' represents 'Full'
+    empty_count = len(latest_locations[latest_locations['ef'] == 1])  # Assuming '1' represents 'Empty'
+    total=full_count + empty_count
 
+    yyfull_count = len(latest_locations[latest_locations['empty_full'] == 0])
+    yyempty_count = len(latest_locations[latest_locations['empty_full'] == 1])
+    yytotal=yyfull_count+yyempty_count
     
+    # Create text to display the counts
+    ef_counts_text = html.P(f' Full : {full_count}, Empty : {empty_count} ,total :{total}|| '
+                        f'y/y - Full : {yyfull_count}, Empty : {yyempty_count},total :{yytotal}')
+    #ef_counts_text= html.P(f'Full Count2:{yyfull_count}, Empty Count2: {yyempty_count}')
+
+    print("part 6")
     
     # Get unique regions and assign a unique color to each region
     unique_regions = filtered_ship_data['region'].unique()
@@ -326,10 +383,18 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
 
     traces = []
     #color = 'Same Color'  # Set a common color for all traces
-
+    print("part 7")
     for imo in filtered_ship_data['imo'].unique():
         imo_df = filtered_ship_data[filtered_ship_data['imo'] == imo]
+        print("part 7.1")
 
+        latest_time = filtered_ship_data['cumulative_hours'].max()
+        start_hour = max(latest_time - selected_time_range, 0)
+        print("part 7.2")
+
+        imo_filtered = imo_df[(imo_df['cumulative_hours'] >= start_hour) & (imo_df['cumulative_hours'] <= latest_time)]
+
+        print("part 8")
 
         customdata_columns = ['imo','region', 'subregion', 'port_name','model_eta', 'name', 'size','draft','max_draft','ef','stated_destination','stated_eta','begin_port_name','begin_region','origin_type','idle_y']  # Columns to include in customdata
     
@@ -338,30 +403,28 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
     
             # Create customdata DataFrame dynamically based on columns
         customdata = pd.DataFrame({col: imo_df[col] for col in customdata_columns})
+
+        #end_hour = imo_df['seen_date_hour'].max()
+        #start_hour = max(end_hour - selected_time_range, 0)
+
+        #imo_filtered = imo_df[(imo_df['seen_date_hour'] >= start_hour) & (imo_df['seen_date_hour'] <= end_hour)]
+
+        print("part 9")
         
         imo_map_trace = go.Scattermapbox(
             mode="lines",
-            lon=imo_df['lon'],
-            lat=imo_df['lat'],
+            lon=imo_filtered['lon'],
+            lat=imo_filtered['lat'],
             marker={'size': 5},
             line=dict(color=color_map.get(imo_df['region'].iloc[0], 'white')),  # Assign color based on 'region'
             name=f'imo={imo}',
             hovertemplate=hovertemplate,
-            customdata=customdata
-            #hovertemplate='<b>Region</b>: %{customdata}<extra></extra>',  # Customize the hover tooltip
-            #customdata=imo_df['region']
-
-
-
-            #hovertemplate='<b>Region</b>: %{customdata[0]}<br><b>Size</b>: %{customdata[1]}<extra></extra><br><b>imo</b>: %{customdata[2]}<extra></extra>',  # Customize the hover tooltip
-            #customdata=pd.DataFrame({'Region': imo_df['region'], 'Size': imo_df['size'],'imo': imo_df['imo']})  # Assign 'region' and 'size' data for the current 'imo' as customdata
-
-            #hovertemplate='<b>Region</b>: %{customdata[0]}<br><b>Size</b>: %{customdata[1]}<extra></extra>',  # Customize the hover tooltip
-            #customdata=[imo_df['region'], imo_df['size']]
+            customdata=customdata,
+            showlegend=False
         )
         # Append each Scattermapbox trace to the 'traces' list
         traces.append(imo_map_trace)
-
+    print("part 10")
     # Create a base map using plotly express scatter_mapbox
     imo_map = px.scatter_mapbox(
         latest_locations,
@@ -377,6 +440,8 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
 
     
     imo_map.update_traces(marker=dict(size=15))
+
+    print("part 11")
     
     # Update marker sizes for differentiating latest and previous locations
     #imo_map.update_traces(marker=dict(size=latest_locations['size']))
@@ -399,6 +464,8 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
         title='IMO and Ports Locations'
     )
 
+    print("part 12")
+
     ports_map.update_traces(marker=dict(size=10, color='grey',opacity=0.8))
 
     for data in ports_map.data:
@@ -408,32 +475,11 @@ def update_map(imo_number, selected_regions,selected_subregions,selected_ports,d
         mapbox_style="open-street-map",
         margin={"r": 0, "t": 0, "l": 0, "b": 0}
     )
+    print("part 13")
 
-    '''fig = go.Figure(go.Scattermapbox(
-        mode = "markers+lines",
-        lon = [10, 20, 30],
-        lat = [10, 20,30],
-        marker = {'size': 10}))
-
-    fig.add_trace(go.Scattermapbox(
-        mode = "markers+lines",
-        lon = [-50, -60,40],
-        lat = [30, 10, -20],
-        marker = {'size': 10}))
-
-    fig.update_layout(
-
-        margin={'l': 0, 't': 0, 'b': 0, 'r': 0},
-        mapbox={
-            'center': {'lon': -20, 'lat': -20},  # Define the center once
-            'style': "open-street-map",
-            'zoom': 1
-        }
-    )'''
-    return imo_map
+    return imo_map,ef_counts_text
 
 #fig.show()
 if __name__ == '__main__':
     app.run_server(debug=True)
-
 
