@@ -1,0 +1,28 @@
+import pyodbc as odbc
+import warnings
+warnings.filterwarnings('ignore')
+
+
+class SqlDbConn:
+   
+    def __init__(self):
+        try:
+            self.server_name = r"1"
+            self.database = "SDR"
+            self.username = ""
+            self.password = "D"
+            self.conn = odbc.connect('DRIVER={ODBC Driver 17 for SQL Server}; \
+                                        SERVER=' + self.server_name + '; \
+                                        DATABASE=' + self.database + '; \
+                                        UID=' + self.username + '; \
+                                        PWD=' + self.password)
+        except Exception as e:
+            print("=========", e)
+
+    def dbConn(self):
+        return self.conn
+
+
+if __name__ == "__main__":
+    main = SqlDbConn()
+    main.dbConn()
